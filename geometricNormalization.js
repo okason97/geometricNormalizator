@@ -4,8 +4,10 @@ var glob = require('glob')
 // implements nodejs wrappers for HTMLCanvasElement, HTMLImageElement, ImageData
 var canvas = require('canvas');
 var faceapi = require('face-api.js');
+var Batch = require('batch')
+  , batch = new Batch;
 
-// patch nodejs environment, we need to provide an implementation of
+  // patch nodejs environment, we need to provide an implementation of
 // HTMLCanvasElement and HTMLImageElement, additionally an implementation
 // of ImageData is required, in case you want to use the MTCNN
 const { Canvas, Image, ImageData } = canvas
@@ -110,16 +112,20 @@ async function runRecognition() {
         // er is an error object or null.
         // files is an array of filenames.
         console.log(files)
-        var i,j,batch,chunk = 2;
+        var i,j,filesBatch,chunk = 2;
         for (i=0,j=files.length; i<j; i+=chunk) {
-            batch = files.slice(i,i+chunk);
-            batch.forEach((file) => {
-                console.log("procesando " + file)
-                canvas.loadImage(file).then((image) => {
-                    geometricNormalization(image, file.substr(file.lastIndexOf('/') + 1))
-                })
+            filesBatch = files.slice(i,i+chunk);
+            filesBatch.forEach((file) => {
+                batch.push(function(done){
+                    console.log("procesando " + file)
+                    canvas.loadImage(file).then(async (image) => {
+                        await geometricNormalization(image, file.substr(file.lastIndexOf('/') + 1))
+                        done()
+                    })
+                });
             })      
         }
+        batch.end()
     })    
 }
 
@@ -128,4 +134,5 @@ async function loadModels(){
     await faceapi.nets.faceLandmark68Net.loadFromDisk(config.MODEL_URL)    
 }
 
+batch.concurrency(6);
 runRecognition()
