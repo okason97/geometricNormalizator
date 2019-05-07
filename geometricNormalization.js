@@ -31,24 +31,24 @@ async function geometricNormalization(image, name) {
 
     console.log("procesando imagen "+name)
 
-    var imageCanvas = canvas.createCanvas(minFaceWidth, minFaceHeight)
+    var imageCanvas = canvas.createCanvas(image.width+desiredFaceWidth, image.height+desiredFaceHeight)
     var ctx = imageCanvas.getContext('2d')
     ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);    
-    ctx.drawImage(image, (minFaceWidth-image.width)/2, (minFaceHeight-image.height)/2)
+    ctx.fillRect(0, 0, image.width+desiredFaceWidth, image.height+desiredFaceHeight);
+    ctx.drawImage(image, desiredFaceWidth/2, desiredFaceHeight/2)
 
     console.log("detectando caras en "+name)
 
     var fullFaceDescriptions = await faceapi
-        .detectAllFaces(imageCanvas, options)
+        .detectSingleFace(imageCanvas, options)
         .withFaceLandmarks()
     console.log("deteccion completa en "+name)
 
 
-    if (fullFaceDescriptions[0]){
+    if (fullFaceDescriptions){
         console.log("cara en "+name)
-        var rightEyeCentroid = mathHelper.centroid(fullFaceDescriptions[0].landmarks.getRightEye())
-        var leftEyeCentroid = mathHelper.centroid(fullFaceDescriptions[0].landmarks.getLeftEye())
+        var rightEyeCentroid = mathHelper.centroid(fullFaceDescriptions.landmarks.getRightEye())
+        var leftEyeCentroid = mathHelper.centroid(fullFaceDescriptions.landmarks.getLeftEye())
         var faceAngle = Math.atan(mathHelper.slope(leftEyeCentroid,rightEyeCentroid))
         var canvasFace = extractFaces(image, imageCanvas, ctx, rightEyeCentroid, leftEyeCentroid, faceAngle, name)
     }else{
@@ -80,7 +80,7 @@ function extractFaces(image, imageCanvas, ctx, rightEyeCentroid, leftEyeCentroid
     ctx.translate(-eyesCentroid.x, -eyesCentroid.y)
     ctx.rect(topLeftCorner.x,topLeftCorner.y,desiredFaceWidth, desiredFaceHeight)
     ctx.fill()
-    ctx.drawImage(image, (minFaceWidth-image.width)/2, (minFaceHeight-image.height)/2)
+    ctx.drawImage(image, desiredFaceWidth/2, desiredFaceHeight/2)
     ctx.restore();
 
     // resize the new canvas to the size of the clipping area
@@ -101,14 +101,15 @@ function saveCallback(canvas, name) {
 
     // remove Base64 stuff from the Image
     const base64Data = url.replace(/^data:image\/png;base64,/, "");
-    fs.writeFile('./processedImages/'+name, base64Data, 'base64', function (err) {
+    fs.writeFileSync('./processedImages/'+name, base64Data, 'base64', function (err) {
         console.log(err);
+        fs.fdatasync('./processedImages/'+name /*, optional callback here */);
     });
 }
 
-async function runRecognition() {            
+async function runRecognition() {
     await loadModels()
-    glob('./data/lfw/*/*.jpg', async (er, files) => {
+    glob('./data/image/origin/*.jpg', async (er, files) => {
         // er is an error object or null.
         // files is an array of filenames.
         console.log(files)
@@ -123,15 +124,15 @@ async function runRecognition() {
                         done()
                     })
                 });
-            })      
+            })
         }
         batch.end()
-    })    
+    })
 }
 
 async function loadModels(){
     await faceapi.nets.tinyFaceDetector.loadFromDisk(config.MODEL_URL)
-    await faceapi.nets.faceLandmark68Net.loadFromDisk(config.MODEL_URL)    
+    await faceapi.nets.faceLandmark68Net.loadFromDisk(config.MODEL_URL)
 }
 
 batch.concurrency(6);
